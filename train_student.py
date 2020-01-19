@@ -308,9 +308,6 @@ def main():
         wm_train_loader = get_usenixwm_cifar100_dataloader()
         wm_loader = get_usenixwm_dataloader()
 
-        batch_wm = next(iter(wm_loader))
-        batch_train = next(iter(train_loader))
-
         epochs = 10
         for epoch in range(1, epochs + 1):
             set_learning_rate(1e-2, optimizer_t)
