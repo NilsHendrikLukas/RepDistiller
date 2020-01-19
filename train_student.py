@@ -304,19 +304,20 @@ def main():
                               momentum=opt.momentum,
                               weight_decay=opt.weight_decay)
 
-        print("==> embedding usenix watermark...")
+
         wm_train_loader = get_usenixwm_cifar100_dataloader()
         wm_loader = get_usenixwm_dataloader()
 
+        print("## Watermark val")
+        teacher_acc, _, _ = validate(wm_loader, model_t, nn.CrossEntropyLoss(), opt)
+
+        print("==> embedding usenix watermark...")
+
         epochs = 10
         for epoch in range(1, epochs + 1):
-            set_learning_rate(1e-2, optimizer_t)
-            print("## Test val")
-            teacher_acc, _, _ = validate(val_loader, model_t, nn.CrossEntropyLoss(), opt)
-            print("## Watermark val")
-            teacher_acc, _, _ = validate(wm_loader, model_t, nn.CrossEntropyLoss(), opt)
-
-            train_vanilla(epoch, wm_train_loader, model_t, nn.CrossEntropyLoss(), optimizer_t, opt)
+            train_vanilla(epoch, wm_loader, model_t, nn.CrossEntropyLoss(), optimizer_t, opt)
+        print("## Watermark val")
+        teacher_acc, _, _ = validate(wm_loader, model_t, nn.CrossEntropyLoss(), opt)
         print("==> done")
 
     # validate teacher accuracy

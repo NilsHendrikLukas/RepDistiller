@@ -51,19 +51,18 @@ class UsenixWM(Dataset):
         self.items = os.listdir(self.root_dir)
 
         if self.__len__() == 0:
-            raise FileNotFoundError("Could not find watermark dataset location at {}!".format(self.root_dir))
+            raise FileNotFoundError("Could not find watermark dataset location at '{}'".format(self.root_dir))
 
         self.transform = transform
 
         num_classes = 100
-        self.targets = np.random.randint(num_classes, size=self.__len__())
+
+        self.targets = np.mod(np.arange(self.__len__()), num_classes)
 
     def __len__(self):
         return len(self.items)
 
     def __getitem__(self, index):
-        if torch.is_tensor(index):
-            index = index.to_list()
 
         img_name = os.path.join(os.getcwd(), os.path.join(self.root_dir, self.items[index]))
 
