@@ -49,8 +49,9 @@ class UsenixWM(Dataset):
         self.root_dir = get_data_folder()
 
         self.items = os.listdir(self.root_dir)
+
         if self.__len__() == 0:
-            raise FileNotFoundError("Could not find watermark dataset location!")
+            raise FileNotFoundError("Could not find watermark dataset location at {}!".format(self.root_dir))
 
         self.transform = transform
 
