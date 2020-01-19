@@ -13,13 +13,24 @@ def adjust_learning_rate_new(epoch, optimizer, LUT):
         param_group['lr'] = lr
 
 
-def adjust_learning_rate(epoch, opt, optimizer):
+def adjust_learning_rate(epoch, opt, optimizer, verbose=False):
     """Sets the learning rate to the initial LR decayed by decay rate every steep step"""
     steps = np.sum(epoch > np.asarray(opt.lr_decay_epochs))
     if steps > 0:
         new_lr = opt.learning_rate * (opt.lr_decay_rate ** steps)
+        if verbose:
+            print("==> Set learning rate to {}".format(new_lr))
         for param_group in optimizer.param_groups:
             param_group['lr'] = new_lr
+    else:
+        if verbose:
+            print("==> Leaving learning rate at {}".format(optimizer.param_groups[0]['lr']))
+
+
+def set_learning_rate(lr, optimizer):
+    """ Sets a fixed learning rate """
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
 
 
 class AverageMeter(object):

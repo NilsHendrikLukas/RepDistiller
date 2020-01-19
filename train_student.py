@@ -14,21 +14,24 @@ import torch
 import torch.optim as optim
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
+from torch.utils.data import Subset
 
-
+from dataset.usenixwm import UsenixWM, get_usenixwm_dataloader, get_usenixwm_cifar100_dataloader
 from models import model_dict
 from models.util import Embed, ConvReg, LinearEmbed
 from models.util import Connector, Translator, Paraphraser
 
+import matplotlib.pyplot as plt
+
 from dataset.cifar100 import get_cifar100_dataloaders, get_cifar100_dataloaders_sample
 
-from helper.util import adjust_learning_rate
+from helper.util import adjust_learning_rate, set_learning_rate
 
 from distiller_zoo import DistillKL, HintLoss, Attention, Similarity, Correlation, VIDLoss, RKDLoss
 from distiller_zoo import PKT, ABLoss, FactorTransfer, KDSVD, FSP, NSTLoss
 from crd.criterion import CRDLoss
 
-from helper.loops import train_distill as train, validate
+from helper.loops import train_distill as train, validate, train_vanilla
 from helper.pretrain import init
 
 
@@ -84,6 +87,9 @@ def parse_option():
     parser.add_argument('--nce_t', default=0.07, type=float, help='temperature parameter for softmax')
     parser.add_argument('--nce_m', default=0.5, type=float, help='momentum for non-parametric updates')
 
+    # Watermark embedding
+    parser.add_argument("--watermark", default=None, type=str, help='Watermarking algorithm', choices=['usenix', 'asiaccs'])
+
     # hint layer
     parser.add_argument('--hint_layer', default=2, type=int, choices=[0, 1, 2, 3, 4])
 
@@ -135,7 +141,10 @@ def load_teacher(model_path, n_cls):
     print('==> loading teacher model')
     model_t = get_teacher_name(model_path)
     model = model_dict[model_t](num_classes=n_cls)
-    model.load_state_dict(torch.load(model_path)['model'])
+    if torch.cuda.is_available():
+        model.load_state_dict(torch.load(model_path)['model'])
+    else:
+        model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))['model'])
     print('==> done')
     return model
 
@@ -158,6 +167,7 @@ def main():
         else:
             train_loader, val_loader, n_data = get_cifar100_dataloaders(batch_size=opt.batch_size,
                                                                         num_workers=opt.num_workers,
+                                                                        n_test=100,
                                                                         is_instance=True)
         n_cls = 100
     else:
@@ -282,6 +292,35 @@ def main():
         module_list.cuda()
         criterion_list.cuda()
         cudnn.benchmark = True
+
+    # embed the watermark into teacher model
+    if opt.watermark == "usenix":
+        # paper: https://www.usenix.org/system/files/conference/usenixsecurity18/sec18-adi.pdf
+
+        # Define an optimizer for the teacher
+        trainable_list_t = nn.ModuleList([model_t])
+        optimizer_t = optim.SGD(trainable_list_t.parameters(),
+                              lr=opt.learning_rate,
+                              momentum=opt.momentum,
+                              weight_decay=opt.weight_decay)
+
+        print("==> embedding usenix watermark...")
+        wm_train_loader = get_usenixwm_cifar100_dataloader()
+        wm_loader = get_usenixwm_dataloader()
+
+        batch_wm = next(iter(wm_loader))
+        batch_train = next(iter(train_loader))
+
+        epochs = 10
+        for epoch in range(1, epochs + 1):
+            set_learning_rate(1e-2, optimizer_t)
+            print("## Test val")
+            teacher_acc, _, _ = validate(val_loader, model_t, nn.CrossEntropyLoss(), opt)
+            print("## Watermark val")
+            teacher_acc, _, _ = validate(wm_loader, model_t, nn.CrossEntropyLoss(), opt)
+
+            train_vanilla(epoch, wm_train_loader, model_t, nn.CrossEntropyLoss(), optimizer_t, opt)
+        print("==> done")
 
     # validate teacher accuracy
     teacher_acc, _, _ = validate(val_loader, model_t, criterion_cls, opt)

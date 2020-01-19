@@ -3,7 +3,7 @@ from __future__ import print_function
 import os
 import socket
 import numpy as np
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torchvision import datasets, transforms
 from PIL import Image
 
@@ -80,7 +80,30 @@ class CIFAR100Instance(CIFAR100BackCompat):
         return img, target, index
 
 
-def get_cifar100_dataloaders(batch_size=128, num_workers=8, is_instance=False):
+def get_cifar100_train_dataset(n_train=None,):
+    """
+        cifar 100
+    """
+    data_folder = get_data_folder()
+
+    train_transform = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761)),
+    ])
+    cifar100_data = datasets.CIFAR100(root=data_folder,
+                      download=True,
+                      train=True,
+                      transform=train_transform)
+
+    if n_train is not None:
+        cifar100_data = Subset(cifar100_data, list(range(n_train)))
+
+    return cifar100_data
+
+
+def get_cifar100_dataloaders(batch_size=128, num_workers=8, n_test=None, is_instance=False):
     """
     cifar 100
     """
@@ -117,6 +140,11 @@ def get_cifar100_dataloaders(batch_size=128, num_workers=8, is_instance=False):
                                  download=True,
                                  train=False,
                                  transform=test_transform)
+
+    # Limit test set to number of specified samples
+    if n_test is not None:
+        test_set = Subset(test_set, list(range(n_test)))
+
     test_loader = DataLoader(test_set,
                              batch_size=int(batch_size / 2),
                              shuffle=False,
