@@ -48,6 +48,7 @@ def parse_option():
     parser.add_argument('--epochs', type=int, default=240, help='number of training epochs')
     parser.add_argument('--init_epochs', type=int, default=30, help='init training for two-stage methods')
 
+
     parser.add_argument('--init_strat', type=str, default=None, choices=['noise'],
                         help='Initialization strategy for student')
     parser.add_argument('--init_inv_corr', type=float, default=0.01, help='Initialization strategy student '
@@ -297,6 +298,8 @@ def main():
         module_list.cuda()
         criterion_list.cuda()
         cudnn.benchmark = True
+        # Default tensors to CUDA
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     # embed the watermark into teacher model
     wm_loader = None
