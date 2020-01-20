@@ -105,7 +105,7 @@ def parse_option():
         opt.tb_path = '/path/to/my/student_tensorboards'
     else:
         opt.model_path = './save/student_model'
-        opt.tb_path = './save/student_tensorboards'
+        opt.tb_path = './save/student_tensorboards/{}'.format(opt.distill)
 
     iterations = opt.lr_decay_epochs.split(',')
     opt.lr_decay_epochs = list([])
@@ -294,6 +294,7 @@ def main():
         cudnn.benchmark = True
 
     # embed the watermark into teacher model
+    wm_loader = None
     if opt.watermark == "usenix":
         # paper: https://www.usenix.org/system/files/conference/usenixsecurity18/sec18-adi.pdf
 
@@ -304,18 +305,20 @@ def main():
                               momentum=opt.momentum,
                               weight_decay=opt.weight_decay)
 
-
-        wm_train_loader = get_usenixwm_cifar100_dataloader()
         wm_loader = get_usenixwm_dataloader()
 
-        print("## Watermark val")
-        teacher_acc, _, _ = validate(wm_loader, model_t, nn.CrossEntropyLoss(), opt)
+        print("## Train data + Watermark Val Acc")
+        teacher_acc, _, _ = validate(val_loader, model_t, nn.CrossEntropyLoss(), opt)
 
         print("==> embedding usenix watermark...")
 
-        epochs = 10
-        for epoch in range(1, epochs + 1):
-            train_vanilla(epoch, wm_loader, model_t, nn.CrossEntropyLoss(), optimizer_t, opt)
+        max_epochs = 250 # Cutoff val
+        for epoch in range(1, max_epochs + 1):
+            set_learning_rate(2e-4, optimizer_t)
+            top1, top5 = train_vanilla(epoch, wm_loader, model_t, nn.CrossEntropyLoss(), optimizer_t, opt)
+            if top1 >= 97:
+                break
+
         print("## Watermark val")
         teacher_acc, _, _ = validate(wm_loader, model_t, nn.CrossEntropyLoss(), opt)
         print("==> done")
@@ -339,6 +342,11 @@ def main():
         logger.log_value('train_loss', train_loss, epoch)
 
         test_acc, tect_acc_top5, test_loss = validate(val_loader, model_s, criterion_cls, opt)
+
+        if wm_loader is not None:
+            print("==> wm retention")
+            wm_top1, wm_top5, wm_loss = validate(wm_loader, model_s, criterion_cls, opt)
+            logger.log_value('wm_ret', wm_top1, epoch)
 
         logger.log_value('test_acc', test_acc, epoch)
         logger.log_value('test_loss', test_loss, epoch)

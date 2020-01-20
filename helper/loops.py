@@ -223,7 +223,7 @@ def validate(val_loader, model, criterion, opt):
     top5 = AverageMeter()
 
     # switch to evaluate mode
-    model.eval()
+    # model.eval() UPDATE: do not do it for testing the watermark overfitting
 
     with torch.no_grad():
         end = time.time()
