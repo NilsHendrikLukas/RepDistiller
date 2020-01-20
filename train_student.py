@@ -36,7 +36,6 @@ from helper.pretrain import init
 
 
 def parse_option():
-
     hostname = socket.gethostname()
 
     parser = argparse.ArgumentParser('argument for training')
@@ -48,7 +47,11 @@ def parse_option():
     parser.add_argument('--num_workers', type=int, default=8, help='num of workers to use')
     parser.add_argument('--epochs', type=int, default=240, help='number of training epochs')
     parser.add_argument('--init_epochs', type=int, default=30, help='init training for two-stage methods')
-    parser.add_argument('--init_strat', type=str, default=None, choices=['noise'], help='Initialization strategy for student')
+
+    parser.add_argument('--init_strat', type=str, default=None, choices=['noise'],
+                        help='Initialization strategy for student')
+    parser.add_argument('--init_inv_corr', type=float, default=0.01, help='Initialization strategy student '
+                                                                          'teacher inverted correlation index')
 
     # optimization
     parser.add_argument('--learning_rate', type=float, default=0.05, help='learning rate')
@@ -89,7 +92,8 @@ def parse_option():
     parser.add_argument('--nce_m', default=0.5, type=float, help='momentum for non-parametric updates')
 
     # Watermark embedding
-    parser.add_argument("--watermark", default=None, type=str, help='Watermarking algorithm', choices=['usenix', 'asiaccs'])
+    parser.add_argument("--watermark", default=None, type=str, help='Watermarking algorithm',
+                        choices=['usenix', 'asiaccs'])
 
     # hint layer
     parser.add_argument('--hint_layer', default=2, type=int, choices=[0, 1, 2, 3, 4])
@@ -276,9 +280,9 @@ def main():
         raise NotImplementedError(opt.distill)
 
     criterion_list = nn.ModuleList([])
-    criterion_list.append(criterion_cls)    # classification loss
-    criterion_list.append(criterion_div)    # KL divergence loss, original knowledge distillation
-    criterion_list.append(criterion_kd)     # other knowledge distillation loss
+    criterion_list.append(criterion_cls)  # classification loss
+    criterion_list.append(criterion_div)  # KL divergence loss, original knowledge distillation
+    criterion_list.append(criterion_kd)  # other knowledge distillation loss
 
     # optimizer
     optimizer = optim.SGD(trainable_list.parameters(),
@@ -302,18 +306,18 @@ def main():
         # Define an optimizer for the teacher
         trainable_list_t = nn.ModuleList([model_t])
         optimizer_t = optim.SGD(trainable_list_t.parameters(),
-                              lr=opt.learning_rate,
-                              momentum=opt.momentum,
-                              weight_decay=opt.weight_decay)
+                                lr=opt.learning_rate,
+                                momentum=opt.momentum,
+                                weight_decay=opt.weight_decay)
 
         wm_loader = get_usenixwm_dataloader()
 
         print("## Train data + Watermark Val Acc")
         teacher_acc, _, _ = validate(val_loader, model_t, nn.CrossEntropyLoss(), opt)
 
-        print("==> embedding usenix watermark...")
+        print("==> embedding USENIX watermark...")
 
-        max_epochs = 250 # Cutoff val
+        max_epochs = 250  # Cutoff val
         for epoch in range(1, max_epochs + 1):
             set_learning_rate(2e-4, optimizer_t)
             top1, top5 = train_vanilla(epoch, wm_loader, model_t, nn.CrossEntropyLoss(), optimizer_t, opt)
@@ -331,12 +335,11 @@ def main():
     # If teacher and student models match, copy over weights for initialization
     if opt.init_strat == "noise" and type(model_t) == type(model_s):
         print("==> Copying teachers weights to student")
-
         model_s.load_state_dict(model_t.state_dict())
 
         with torch.no_grad():
             for param in model_s.parameters():
-                param.add_(torch.randn(param.size()) * 0.01)
+                param.add_(torch.randn(param.size()) * opt.init_inv_corr)
 
         student_acc, _, _ = validate(val_loader, model_s, criterion_cls, opt)
         print('student accuracy: ', student_acc)
