@@ -48,6 +48,7 @@ def parse_option():
     parser.add_argument('--num_workers', type=int, default=8, help='num of workers to use')
     parser.add_argument('--epochs', type=int, default=240, help='number of training epochs')
     parser.add_argument('--init_epochs', type=int, default=30, help='init training for two-stage methods')
+    parser.add_argument('--init_strat', type=str, default=None, choices=['noise'], help='Initialization strategy for student')
 
     # optimization
     parser.add_argument('--learning_rate', type=float, default=0.05, help='learning rate')
@@ -326,6 +327,20 @@ def main():
     # validate teacher accuracy
     teacher_acc, _, _ = validate(val_loader, model_t, criterion_cls, opt)
     print('teacher accuracy: ', teacher_acc)
+
+    # If teacher and student models match, copy over weights for initialization
+    if opt.init_strat == "noise" and type(model_t) == type(model_s):
+        print("==> Copying teachers weights to student")
+
+        model_s.load_state_dict(model_t.state_dict())
+
+        with torch.no_grad():
+            for param in model_s.parameters():
+                param.add_(torch.randn(param.size()) * 0.01)
+
+        student_acc, _, _ = validate(val_loader, model_s, criterion_cls, opt)
+        print('student accuracy: ', student_acc)
+        print("==> done")
 
     # routine
     for epoch in range(1, opt.epochs + 1):
