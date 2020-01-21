@@ -298,8 +298,6 @@ def main():
         module_list.cuda()
         criterion_list.cuda()
         cudnn.benchmark = True
-        # Default tensors to CUDA
-        torch.set_default_tensor_type('torch.cuda.FloatTensor')
 
     # embed the watermark into teacher model
     wm_loader = None
@@ -336,13 +334,17 @@ def main():
     print('teacher accuracy: ', teacher_acc)
 
     # If teacher and student models match, copy over weights for initialization
-    if opt.init_strat == "noise" and type(model_t) == type(model_s):
-        print("==> Copying teachers weights to student")
+    if (opt.init_strat == "noise") and (type(model_t) == type(model_s)):
+        print("==> Copying teachers weights to student with a weight of {}".format(opt.init_inv_corr))
         model_s.load_state_dict(model_t.state_dict())
 
         with torch.no_grad():
             for param in model_s.parameters():
-                param.add_(torch.randn(param.size()) * opt.init_inv_corr)
+                if torch.cuda.is_available():
+                    noise = (torch.randn(param.size()) * opt.init_inv_corr).cuda()
+                    param.add_(noise)
+                else:
+                    param.add_(torch.randn(param.size()) * opt.init_inv_corr)
 
         student_acc, _, _ = validate(val_loader, model_s, criterion_cls, opt)
         print('student accuracy: ', student_acc)
